@@ -1,4 +1,4 @@
-import os
+from flask import Flask, render_template, request, jsonify
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -8,118 +8,77 @@ from webdriver_manager.chrome import ChromeDriverManager
 import time
 import re
 
-# Fetch username and password from environment variables
-username = os.getenv("ETLAB_USERNAME")
-password = os.getenv("ETLAB_PASSWORD")
+app = Flask(__name__)
 
-if not username or not password:
-    raise ValueError("Username and password must be provided as environment variables.")
+@app.route('/')
+def home():
+    # Serve the login form HTML
+    return render_template('login.html')
 
-options = webdriver.ChromeOptions()
-driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+@app.route('/fetch_data', methods=['POST'])
+def fetch_data():
+    # Get the username and password from the user input
+    username = request.form['username']
+    password = request.form['password']
 
-url = "https://sctce.etlab.in/user/login"
-driver.get(url)
-
-try:
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "LoginForm_username"))).send_keys(username)
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "LoginForm_password"))).send_keys(password)
-    WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))).click()
-except Exception as e:
-    print("❌ Login failed:", e)
-
-time.sleep(5)
-
-try:
-    WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a.shortcut[href='/student/attendance']"))).click()
-except:
-    print("❌ Attendance link not found!")
-
-time.sleep(5)
-
-attendance_dict = {}
-
-try:
-    rows = driver.find_elements(By.CSS_SELECTOR, "#itsthetable tbody tr")
-    for row in rows:
-        date = row.find_element(By.XPATH, ".//th").text
-        periods = row.find_elements(By.XPATH, ".//td")
-        attendance_statuses = []
-        for period in periods:
-            status = period.get_attribute("class").replace("span1 ", "")
-            attendance_statuses.append(status)
-        attendance_dict[date] = attendance_statuses
-except Exception as e:
-    print("❌ Could not extract attendance data:", e)
-
-try:
-    WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/ktuacademics/student/viewattendancesubject/81']"))).click()
-except:
-    print("❌ Attendance By Subject link not found!")
-
-time.sleep(5)
-
-subject_attendance = {}
-
-try:
-    subject_rows = driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
-    for row in subject_rows:
-        cols = row.find_elements(By.CSS_SELECTOR, "td")
-        if len(cols) > 2:
-            subject_names = [col.text.strip() for col in cols[3:-2]]
-            attendance_values = [col.text.strip() for col in cols[4:]]
-            for subject, attendance in zip(subject_names, attendance_values):
-                if attendance:
-                    subject_attendance[subject] = attendance
-except Exception as e:
-    print("❌ Could not extract subject-wise attendance:", e)
-
-try:
-    WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/student/timetable']"))).click()
-except:
-    print("❌ Timetable link not found!")
-
-time.sleep(5)
-
-timetable_dict = {}
-
-try:
-    timetable_rows = driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
-    for row in timetable_rows:
-        day = row.find_element(By.CSS_SELECTOR, "td:nth-child(1)").text
-        periods = row.find_elements(By.CSS_SELECTOR, "td:not(:first-child)")
-        subjects = [period.text.strip().replace("\n", " ") if period.text.strip() else "No Class" for period in periods]
-        timetable_dict[day] = subjects
-except Exception as e:
-    print("❌ Could not extract timetable data:", e)
-
-driver.quit()
-
-print("\n📊 **Integrated Attendance & Timetable:**\n")
-
-days_mapping = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-for date, attendance in attendance_dict.items():
-    clean_date = re.sub(r'(st|nd|rd|th)', '', date).strip()
-    try:
-        date_int = int(clean_date)
-        day_name = days_mapping[(date_int - 1) % 7]
-    except ValueError:
-        day_name = "Unknown"
+    # Selenium WebDriver setup
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")  # Run headless to avoid opening a browser window
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     
-    subjects = timetable_dict.get(day_name, ["No Data Available"])
+    # ETlab login URL
+    url = "https://sctce.etlab.in/user/login"
+    driver.get(url)
 
-    print(f"\n📅 {day_name}, {date}:")
-    for i, (status, subject) in enumerate(zip(attendance, subjects)):
-        status_text = {
-            "present": "✅ Present",
-            "absent": "❌ Absent",
-            "holiday": "🎉 Holiday",
-            "n-a": "No Class"
-        }.get(status, status)
+    try:
+        # Wait for the login form and submit the credentials
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "LoginForm_username"))).send_keys(username)
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "LoginForm_password"))).send_keys(password)
+        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))).click()
+    except Exception as e:
+        return jsonify({"error": f"Login failed: {e}"}), 400
 
-        print(f"  🕘 Period {i+1}: {subject} -> {status_text}")
+    # Wait for login to complete
+    time.sleep(5)
 
-print("\n📊 **Subject-wise Attendance:**\n")
-for subject, data in subject_attendance.items():
-    print(f"📖 {subject}: {data}")
+    # Extract attendance data
+    attendance_dict = {}
+    try:
+        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a.shortcut[href='/student/attendance']"))).click()
+        time.sleep(5)
+        rows = driver.find_elements(By.CSS_SELECTOR, "#itsthetable tbody tr")
+        for row in rows:
+            date = row.find_element(By.XPATH, ".//th").text
+            periods = row.find_elements(By.XPATH, ".//td")
+            attendance_statuses = []
+            for period in periods:
+                status = period.get_attribute("class").replace("span1 ", "")
+                attendance_statuses.append(status)
+            attendance_dict[date] = attendance_statuses
+    except Exception as e:
+        print("❌ Could not extract attendance data:", e)
+
+    # Extract timetable data
+    timetable_dict = {}
+    try:
+        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/student/timetable']"))).click()
+        time.sleep(5)
+        timetable_rows = driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
+        for row in timetable_rows:
+            day = row.find_element(By.CSS_SELECTOR, "td:nth-child(1)").text
+            periods = row.find_elements(By.CSS_SELECTOR, "td:not(:first-child)")
+            subjects = [period.text.strip().replace("\n", " ") if period.text.strip() else "No Class" for period in periods]
+            timetable_dict[day] = subjects
+    except Exception as e:
+        print("❌ Could not extract timetable data:", e)
+
+    driver.quit()
+
+    # Return the scraped data as JSON response
+    return jsonify({
+        "attendance": attendance_dict,
+        "timetable": timetable_dict
+    })
+
+if __name__ == '__main__':
+    app.run(debug=True)
