@@ -1,3 +1,4 @@
+import os
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -7,9 +8,12 @@ from webdriver_manager.chrome import ChromeDriverManager
 import time
 import re
 
-# Ask for username and password
-username = input("Enter your username: ")
-password = input("Enter your password: ")
+# Fetch username and password from environment variables
+username = os.getenv("ETLAB_USERNAME")
+password = os.getenv("ETLAB_PASSWORD")
+
+if not username or not password:
+    raise ValueError("Username and password must be provided as environment variables.")
 
 options = webdriver.ChromeOptions()
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
