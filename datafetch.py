@@ -1,4 +1,5 @@
 import logging
+import os  # Import os module
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
@@ -49,21 +50,31 @@ def login():
         # Scrape attendance data
         attendance_data = {}
         attendance_table = soup.find("table", {"id": "itsthetable"})
-        rows = attendance_table.find_all("tr")
-        for row in rows:
-            date = row.find("th").text
-            periods = row.find_all("td")
-            attendance_statuses = [period["class"][0] if "class" in period.attrs else "No Class" for period in periods]
-            attendance_data[date] = attendance_statuses
-        
+        if attendance_table:
+            rows = attendance_table.find_all("tr")
+            for row in rows:
+                date = row.find("th")
+                if date:
+                    date = date.text
+                    periods = row.find_all("td")
+                    attendance_statuses = [period["class"][0] if "class" in period.attrs else "No Class" for period in periods]
+                    attendance_data[date] = attendance_statuses
+        else:
+            logging.error("Attendance table not found")
+
         # Scrape timetable data
         timetable_data = {}
         timetable_table = soup.find("table", {"id": "timetable"})  # Modify with the actual ID or class
-        timetable_rows = timetable_table.find_all("tr")
-        for row in timetable_rows:
-            day = row.find("td", {"class": "day"}).text
-            subjects = [period.text.strip() for period in row.find_all("td")[1:]]
-            timetable_data[day] = subjects
+        if timetable_table:
+            timetable_rows = timetable_table.find_all("tr")
+            for row in timetable_rows:
+                day = row.find("td", {"class": "day"})  # Adjust with actual class or selector
+                if day:
+                    day = day.text.strip()
+                    subjects = [period.text.strip() for period in row.find_all("td")[1:]]
+                    timetable_data[day] = subjects
+        else:
+            logging.error("Timetable table not found")
 
         return jsonify({"attendance": attendance_data, "timetable": timetable_data})
 
