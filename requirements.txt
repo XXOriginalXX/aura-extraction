@@ -3,3 +3,4 @@ selenium==4.1.0
 webdriver-manager==3.8.3
 requests==2.26.0
 werkzeug==2.0.3  
+flask-cors==3.0.10
