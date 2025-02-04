@@ -22,7 +22,10 @@ def login():
     username = data.get("username")
     password = data.get("password")
 
+    print(f"🔍 Received Login Request | Username: {username}")
+
     if not username or not password:
+        print("❌ Missing username or password")
         return jsonify({"error": "Username and password required"}), 400
 
     try:
@@ -31,13 +34,26 @@ def login():
         options.add_argument("--headless")  # Run without UI (important for deployment)
         driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
-        # Open ETLab login page
+        print("✅ WebDriver initialized, opening ETLab login page...")
         driver.get("https://sctce.etlab.in/user/login")
+
+        # Find and enter username
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "LoginForm_username"))).send_keys(username)
+        # Find and enter password
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "LoginForm_password"))).send_keys(password)
+        # Click login button
         WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))).click()
 
-        time.sleep(5)  # Wait for the page to load
+        print("🕒 Waiting for login to process...")
+        time.sleep(5)  # Allow page to load
+
+        # Check if login failed
+        if "user/login" in driver.current_url:
+            print("❌ Login failed - Incorrect credentials")
+            driver.quit()
+            return jsonify({"error": "Invalid credentials"}), 401
+
+        print("✅ Login successful!")
 
         # Extract attendance data
         attendance_data = {}
@@ -51,8 +67,8 @@ def login():
                 periods = row.find_elements(By.XPATH, ".//td")
                 attendance_statuses = [period.get_attribute("class").replace("span1 ", "") for period in periods]
                 attendance_data[date] = attendance_statuses
-        except:
-            print("❌ Attendance data extraction failed")
+        except Exception as e:
+            print("❌ Attendance data extraction failed:", str(e))
 
         # Extract timetable data
         timetable_data = {}
@@ -66,15 +82,14 @@ def login():
                 periods = row.find_elements(By.CSS_SELECTOR, "td:not(:first-child)")
                 subjects = [period.text.strip().replace("\n", " ") if period.text.strip() else "No Class" for period in periods]
                 timetable_data[day] = subjects
-        except:
-            print("❌ Timetable data extraction failed")
+        except Exception as e:
+            print("❌ Timetable data extraction failed:", str(e))
 
         driver.quit()  # Close Selenium
+        print("✅ Successfully extracted data!")
 
         return jsonify({"attendance": attendance_data, "timetable": timetable_data})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+        print("🔥 Internal Server Error:", str(e))
+        return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
