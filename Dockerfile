@@ -1,7 +1,7 @@
 # Start with a basic Python image
 FROM python:3.9-slim
 
-# Install some tools and Chromium (the browser)
+# Install necessary dependencies and Chromium
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
     libasound2 \
     chromium
 
-# Tell Python where to find Chromium
+# Set environment variable to tell selenium where the chrome binary is
 ENV CHROME_BIN=/usr/bin/chromium
 
 # Install Python packages (from requirements.txt)
