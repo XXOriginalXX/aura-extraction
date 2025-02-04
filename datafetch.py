@@ -31,9 +31,13 @@ def login():
         return jsonify({"error": "Username and password required"}), 400
 
     try:
-        # Setup Selenium WebDriver
+        # Setup Selenium WebDriver with Chrome Binary location specified
         options = webdriver.ChromeOptions()
-        options.add_argument("--headless")  # Run without UI (important for deployment)
+        options.add_argument("--headless")  # Run without UI
+        options.add_argument("--no-sandbox")  # Disables the sandbox for the chromium process
+        options.add_argument("--disable-dev-shm-usage")  # Helps to avoid memory issues
+        options.binary_location = "/usr/bin/google-chrome-stable"  # Path to the Chrome binary
+
         driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
         # Open ETLab login page
