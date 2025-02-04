@@ -34,6 +34,7 @@ def login():
         # Setup Selenium WebDriver with Chrome Binary location specified
         options = webdriver.ChromeOptions()
         options.add_argument("--headless")  # Run without UI
+        options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/chromium") 
         options.add_argument("--no-sandbox")  # Disables the sandbox for the chromium process
         options.add_argument("--disable-dev-shm-usage")  # Helps to avoid memory issues
         options.binary_location = "/usr/bin/google-chrome-stable"  # Path to the Chrome binary
