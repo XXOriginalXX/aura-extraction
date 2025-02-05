@@ -3,7 +3,7 @@ set -ex
 
 # Install Chromium (lighter than Google Chrome)
 apt-get update
-apt-get install -y chromium-browser
+apt-get install -y chromium
 
 # Verify installation
-chromium-browser --version
+chromium --version
