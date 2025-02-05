@@ -5,6 +5,11 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
+# Root route for home page
+@app.route('/')
+def home():
+    return "Welcome to the Attendance API!"
+
 @app.route('/get-attendance', methods=['POST'])
 def get_attendance():
     # Get username and password from the request body
