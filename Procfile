@@ -1,1 +1,1 @@
-web: ./install_chrome.sh && gunicorn app:app
+web: python datafetch.py
