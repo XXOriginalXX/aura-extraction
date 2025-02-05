@@ -33,8 +33,7 @@ def login():
     try:
         # Setup Selenium WebDriver
         options = webdriver.ChromeOptions()
-        options.binary_location = "/usr/bin/chromium-browser"
-  # Correct Chrome path for Railway
+        options.binary_location = "/usr/bin/chromium"  # Correct path for Railway
         options.add_argument("--headless")  # Run in headless mode (no UI)
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
