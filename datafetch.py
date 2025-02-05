@@ -1,87 +1,116 @@
-from flask import Flask, request, jsonify
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-import os
-import time
+import requests
+from bs4 import BeautifulSoup
+import re
 
-app = Flask(__name__)
+# Ask for username and password (this could be entered manually or obtained through a config)
+username = input("Enter your username: ")
+password = input("Enter your password: ")
 
-# ✅ Configure Selenium for Railway Deployment
-def init_driver():
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.binary_location = "/usr/bin/chromium"
+# Create session and login (Simulating a login using POST request)
+session = requests.Session()
 
-    service = Service("/usr/bin/chromedriver")  # Use Railway's system ChromeDriver
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    return driver
+# Define login URL and payload
+login_url = "https://sctce.etlab.in/user/login"
+login_payload = {
+    "LoginForm[username]": username,
+    "LoginForm[password]": password,
+}
 
-# 📌 Route to Fetch Timetable
-@app.route('/api/timetable', methods=['GET'])
-def fetch_timetable():
-    username = request.args.get('username')
-    password = request.args.get('password')
+# Perform login
+login_response = session.post(login_url, data=login_payload)
 
-    if not username or not password:
-        return jsonify({"error": "Username and Password are required"}), 400
+# Check if login was successful (you can modify this based on the actual response from the site)
+if login_response.url == login_url:  # If redirected to the login page again, login failed
+    print("❌ Login failed!")
+    exit()
 
-    driver = init_driver()
-    
+# After successful login, fetch the attendance page
+attendance_url = "https://sctce.etlab.in/student/attendance"
+attendance_response = session.get(attendance_url)
+attendance_soup = BeautifulSoup(attendance_response.text, "html.parser")
+
+# Extract attendance data
+attendance_dict = {}
+
+attendance_table = attendance_soup.find("table", {"id": "itsthetable"})
+if attendance_table:
+    rows = attendance_table.find("tbody").find_all("tr")
+    for row in rows:
+        date = row.find("th").text.strip()
+        periods = row.find_all("td")
+        attendance_statuses = []
+        for period in periods:
+            status = period.get("class")[0].replace("span1 ", "")
+            attendance_statuses.append(status)
+        attendance_dict[date] = attendance_statuses
+else:
+    print("❌ Could not extract attendance data!")
+
+# Fetch subject-wise attendance page
+subject_url = "https://sctce.etlab.in/ktuacademics/student/viewattendancesubject/81"
+subject_response = session.get(subject_url)
+subject_soup = BeautifulSoup(subject_response.text, "html.parser")
+
+subject_attendance = {}
+
+subject_table = subject_soup.find("table")
+if subject_table:
+    subject_rows = subject_table.find("tbody").find_all("tr")
+    for row in subject_rows:
+        cols = row.find_all("td")
+        if len(cols) > 2:
+            subject_names = [col.text.strip() for col in cols[3:-2]]
+            attendance_values = [col.text.strip() for col in cols[4:]]
+            for subject, attendance in zip(subject_names, attendance_values):
+                if attendance:
+                    subject_attendance[subject] = attendance
+else:
+    print("❌ Could not extract subject-wise attendance!")
+
+# Fetch timetable page
+timetable_url = "https://sctce.etlab.in/student/timetable"
+timetable_response = session.get(timetable_url)
+timetable_soup = BeautifulSoup(timetable_response.text, "html.parser")
+
+timetable_dict = {}
+
+timetable_table = timetable_soup.find("table")
+if timetable_table:
+    timetable_rows = timetable_table.find("tbody").find_all("tr")
+    for row in timetable_rows:
+        day = row.find("td").text.strip()
+        periods = row.find_all("td")[1:]
+        subjects = [period.text.strip().replace("\n", " ") if period.text.strip() else "No Class" for period in periods]
+        timetable_dict[day] = subjects
+else:
+    print("❌ Could not extract timetable data!")
+
+# Display integrated attendance and timetable
+print("\n📊 **Integrated Attendance & Timetable:**\n")
+
+days_mapping = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+for date, attendance in attendance_dict.items():
+    clean_date = re.sub(r'(st|nd|rd|th)', '', date).strip()
     try:
-        driver.get("https://sctce.etlab.in/user/login")
-        time.sleep(2)
-
-        # Login process
-        driver.find_element("id", "username").send_keys(username)
-        driver.find_element("id", "password").send_keys(password)
-        driver.find_element("id", "login-btn").click()
-        time.sleep(3)
-
-        # Extract timetable (Modify selectors as needed)
-        timetable = driver.find_element("id", "timetable").text
-
-        driver.quit()
-        return jsonify({"timetable": timetable})
+        date_int = int(clean_date)
+        day_name = days_mapping[(date_int - 1) % 7]
+    except ValueError:
+        day_name = "Unknown"
     
-    except Exception as e:
-        driver.quit()
-        return jsonify({"error": str(e)}), 500
+    subjects = timetable_dict.get(day_name, ["No Data Available"])
 
-# 📌 Route to Fetch Attendance
-@app.route('/api/attendance', methods=['GET'])
-def fetch_attendance():
-    username = request.args.get('username')
-    password = request.args.get('password')
+    print(f"\n📅 {day_name}, {date}:")
+    for i, (status, subject) in enumerate(zip(attendance, subjects)):
+        status_text = {
+            "present": "✅ Present",
+            "absent": "❌ Absent",
+            "holiday": "🎉 Holiday",
+            "n-a": "No Class"
+        }.get(status, status)
 
-    if not username or not password:
-        return jsonify({"error": "Username and Password are required"}), 400
+        print(f"  🕘 Period {i+1}: {subject} -> {status_text}")
 
-    driver = init_driver()
-    
-    try:
-        driver.get("https://sctce.etlab.in/user/login")
-        time.sleep(2)
-
-        # Login process
-        driver.find_element("id", "username").send_keys(username)
-        driver.find_element("id", "password").send_keys(password)
-        driver.find_element("id", "login-btn").click()
-        time.sleep(3)
-
-        # Extract attendance (Modify selectors as needed)
-        attendance = driver.find_element("id", "attendance").text
-
-        driver.quit()
-        return jsonify({"attendance": attendance})
-    
-    except Exception as e:
-        driver.quit()
-        return jsonify({"error": str(e)}), 500
-
-# ✅ Run Flask on Railway's dynamic port
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port, debug=True)
+print("\n📊 **Subject-wise Attendance:**\n")
+for subject, data in subject_attendance.items():
+    print(f"📖 {subject}: {data}")
