@@ -1,9 +1,14 @@
 import logging
 import os
+import time
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import requests
-from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -26,67 +31,65 @@ def login():
         return jsonify({"error": "Username and password required"}), 400
 
     try:
-        login_url = "https://sctce.etlab.in/user/login"
+        # 🛠️ Configure Chrome options for Render
+        chrome_options = webdriver.ChromeOptions()
+        chrome_options.add_argument("--headless")  # Run Chrome without UI
+        chrome_options.add_argument("--no-sandbox")  # Bypass sandbox restrictions
+        chrome_options.add_argument("--disable-dev-shm-usage")  # Prevent memory errors
+        chrome_options.add_argument("--disable-gpu")  # Disable GPU acceleration
+        chrome_options.binary_location = "/usr/bin/google-chrome-stable"  # Set Chrome binary path
+
+        # 🚀 Start Selenium WebDriver
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+
+        # 🌐 Open ETLab login page
+        driver.get("https://sctce.etlab.in/user/login")
+        logging.info(f"Attempting login for {username}")
+
+        # 📝 Enter Username & Password
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "LoginForm_username"))).send_keys(username)
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "LoginForm_password"))).send_keys(password)
+        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))).click()
+
+        time.sleep(5)  # Wait for login to complete
         
-        # Start a session to maintain cookies
-        session = requests.Session()
+        # ✅ Check if login was successful
+        if "Dashboard" not in driver.page_source:
+            driver.quit()
+            return jsonify({"error": "Login failed. Please check your credentials."}), 400
 
-        # Headers to mimic a real browser
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": login_url,
-        }
-
-        # Login data (Adjust based on actual form fields)
-        payload = {
-            'LoginForm[username]': username,
-            'LoginForm[password]': password,
-        }
-
-        # Send POST request to login
-        response = session.post(login_url, data=payload, headers=headers)
-
-        # Check if login was successful
-        if "Dashboard" not in response.text:  
-            return jsonify({"error": "Login failed"}), 400
-
-        # Parse the response using BeautifulSoup
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        # DEBUGGING: Print the response HTML to check structure
-        with open("response.html", "w", encoding="utf-8") as file:
-            file.write(soup.prettify())  # Save HTML to check structure
-
-        # Scrape attendance data
+        # 📅 Scrape Attendance Data
         attendance_data = {}
-        attendance_table = soup.find("table", {"id": "itsthetable"})
-        if attendance_table:
-            rows = attendance_table.find_all("tr")
-            for row in rows:
-                date = row.find("th")
-                if date:
-                    date = date.text.strip()
-                    periods = row.find_all("td")
-                    attendance_statuses = [period["class"][0] if "class" in period.attrs else "No Class" for period in periods]
-                    attendance_data[date] = attendance_statuses
-        else:
-            logging.error("Attendance table not found")
-            return jsonify({"error": "Attendance data not found"}), 500
+        try:
+            WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a.shortcut[href='/student/attendance']"))).click()
+            time.sleep(5)
 
-        # Scrape timetable data
+            rows = driver.find_elements(By.CSS_SELECTOR, "#itsthetable tbody tr")
+            for row in rows:
+                date = row.find_element(By.XPATH, ".//th").text
+                periods = row.find_elements(By.XPATH, ".//td")
+                attendance_statuses = [period.get_attribute("class").replace("span1 ", "") for period in periods]
+                attendance_data[date] = attendance_statuses
+        except Exception as e:
+            logging.error(f"Error extracting attendance data: {str(e)}")
+
+        # 📆 Scrape Timetable Data
         timetable_data = {}
-        timetable_table = soup.find("table", {"id": "timetable"})
-        if timetable_table:
-            timetable_rows = timetable_table.find_all("tr")
+        try:
+            WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/student/timetable']"))).click()
+            time.sleep(5)
+
+            timetable_rows = driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
             for row in timetable_rows:
-                day = row.find("td", {"class": "day"})
-                if day:
-                    day = day.text.strip()
-                    subjects = [period.text.strip() for period in row.find_all("td")[1:]]
-                    timetable_data[day] = subjects
-        else:
-            logging.error("Timetable table not found")
-            return jsonify({"error": "Timetable data not found"}), 500
+                day = row.find_element(By.CSS_SELECTOR, "td:nth-child(1)").text
+                periods = row.find_elements(By.CSS_SELECTOR, "td:not(:first-child)")
+                subjects = [period.text.strip().replace("\n", " ") if period.text.strip() else "No Class" for period in periods]
+                timetable_data[day] = subjects
+        except Exception as e:
+            logging.error(f"Error extracting timetable data: {str(e)}")
+
+        driver.quit()  # Close Selenium
 
         return jsonify({"attendance": attendance_data, "timetable": timetable_data})
 
