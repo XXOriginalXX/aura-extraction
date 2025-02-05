@@ -1,9 +1,6 @@
 #!/bin/bash
-set -ex
-
-# Install Chromium (lighter than Google Chrome)
-apt-get update
-apt-get install -y chromium
-
-# Verify installation
-chromium --version
+echo "Installing Chrome..."
+wget -qO- https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb > google-chrome.deb
+sudo apt install -y ./google-chrome.deb
+rm google-chrome.deb
+echo "Chrome Installed!"
