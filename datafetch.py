@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+import signal
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from selenium import webdriver
@@ -16,6 +17,13 @@ CORS(app)  # Allow requests from React
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
+
+# Set a longer timeout for Flask request
+def handler(signum, frame):
+    raise Exception("Request timed out!")
+
+signal.signal(signal.SIGALRM, handler)
+signal.alarm(120)  # Set a 2-minute timeout for the request
 
 @app.route("/")
 def home():
@@ -50,7 +58,7 @@ def login():
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "LoginForm_password"))).send_keys(password)
         WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))).click()
 
-        time.sleep(5)  # Wait for the page to load
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "Dashboard")))  # Wait for dashboard to load
         
         # Check if login was successful
         if "Dashboard" not in driver.page_source:
@@ -61,7 +69,7 @@ def login():
         attendance_data = {}
         try:
             WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a.shortcut[href='/student/attendance']"))).click()
-            time.sleep(5)
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "#itsthetable tbody tr")))
 
             rows = driver.find_elements(By.CSS_SELECTOR, "#itsthetable tbody tr")
             for row in rows:
@@ -76,7 +84,7 @@ def login():
         timetable_data = {}
         try:
             WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/student/timetable']"))).click()
-            time.sleep(5)
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "table tbody tr")))
 
             timetable_rows = driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
             for row in timetable_rows:
