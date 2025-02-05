@@ -37,7 +37,8 @@ def login():
         chrome_options.add_argument("--no-sandbox")  # Bypass sandbox restrictions
         chrome_options.add_argument("--disable-dev-shm-usage")  # Prevent memory errors
         chrome_options.add_argument("--disable-gpu")  # Disable GPU acceleration
-        chrome_options.binary_location = "/usr/bin/google-chrome-stable"  # Set Chrome binary path
+        chrome_options.binary_location = "/opt/google/chrome/google-chrome"
+ # Set Chrome binary path
 
         # 🚀 Start Selenium WebDriver
         service = Service(ChromeDriverManager().install())
