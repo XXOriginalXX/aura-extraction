@@ -1,13 +1,15 @@
 import os
 import requests
 from bs4 import BeautifulSoup
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect
 
 app = Flask(__name__)
 
-# Root route for home page
-@app.route('/')
+# Root route now handles both GET and POST
+@app.route('/', methods=['GET', 'POST'])
 def home():
+    if request.method == 'POST':
+        return jsonify({"message": "Welcome to the Attendance API! Use /get-attendance with POST."})
     return "Welcome to the Attendance API!"
 
 @app.route('/get-attendance', methods=['POST'])
@@ -63,12 +65,11 @@ def get_attendance():
         subject_rows = subject_table.find("tbody").find_all("tr")
         for row in subject_rows:
             cols = row.find_all("td")
-            if len(cols) > 2:
-                subject_names = [col.text.strip() for col in cols[3:-2]]
-                attendance_values = [col.text.strip() for col in cols[4:]]
-                for subject, attendance in zip(subject_names, attendance_values):
-                    if attendance:
-                        subject_attendance[subject] = attendance
+            if len(cols) >= 5:  # Ensure sufficient columns exist
+                subject_name = cols[3].text.strip()
+                attendance_value = cols[4].text.strip()
+                if subject_name and attendance_value:
+                    subject_attendance[subject_name] = attendance_value
     else:
         return jsonify({"error": "Could not extract subject-wise attendance!"}), 500
 
