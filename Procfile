@@ -1,1 +1,1 @@
-web: gunicorn app:app
+web: ./install_chrome.sh && gunicorn app:app
