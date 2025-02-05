@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
 import os
 import time
@@ -14,8 +13,9 @@ def init_driver():
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    
-    service = Service(ChromeDriverManager().install())
+    chrome_options.binary_location = "/usr/bin/chromium"
+
+    service = Service("/usr/bin/chromedriver")  # Use Railway's system ChromeDriver
     driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
 
@@ -31,7 +31,7 @@ def fetch_timetable():
     driver = init_driver()
     
     try:
-        driver.get("https://etlab.ktu.edu/login")
+        driver.get("https://sctce.etlab.in/user/login")
         time.sleep(2)
 
         # Login process
@@ -62,7 +62,7 @@ def fetch_attendance():
     driver = init_driver()
     
     try:
-        driver.get("https://etlab.ktu.edu/login")
+        driver.get("https://sctce.etlab.in/user/login")
         time.sleep(2)
 
         # Login process
