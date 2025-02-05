@@ -31,36 +31,33 @@ def login():
         return jsonify({"error": "Username and password required"}), 400
 
     try:
-        # 🛠️ Configure Chrome options for Render
-        chrome_options = webdriver.ChromeOptions()
-        chrome_options.add_argument("--headless")  # Run Chrome without UI
-        chrome_options.add_argument("--no-sandbox")  # Bypass sandbox restrictions
-        chrome_options.add_argument("--disable-dev-shm-usage")  # Prevent memory errors
-        chrome_options.add_argument("--disable-gpu")  # Disable GPU acceleration
-        chrome_options.binary_location = "/opt/google/chrome/google-chrome"
- # Set Chrome binary path
+        # Setup Selenium WebDriver
+        options = webdriver.ChromeOptions()
+        options.binary_location = "/usr/bin/google-chrome-stable"  # Correct Chrome path for Railway
+        options.add_argument("--headless")  # Run in headless mode (no UI)
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
 
-        # 🚀 Start Selenium WebDriver
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
-        # 🌐 Open ETLab login page
+        # Open ETLab login page
         driver.get("https://sctce.etlab.in/user/login")
+
         logging.info(f"Attempting login for {username}")
 
-        # 📝 Enter Username & Password
+        # Enter login details
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "LoginForm_username"))).send_keys(username)
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "LoginForm_password"))).send_keys(password)
         WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))).click()
 
-        time.sleep(5)  # Wait for login to complete
+        time.sleep(5)  # Wait for the page to load
         
-        # ✅ Check if login was successful
+        # Check if login was successful
         if "Dashboard" not in driver.page_source:
             driver.quit()
             return jsonify({"error": "Login failed. Please check your credentials."}), 400
 
-        # 📅 Scrape Attendance Data
+        # Extract attendance data
         attendance_data = {}
         try:
             WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a.shortcut[href='/student/attendance']"))).click()
@@ -75,7 +72,7 @@ def login():
         except Exception as e:
             logging.error(f"Error extracting attendance data: {str(e)}")
 
-        # 📆 Scrape Timetable Data
+        # Extract timetable data
         timetable_data = {}
         try:
             WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/student/timetable']"))).click()
