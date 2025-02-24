@@ -89,18 +89,25 @@ def get_attendance():
         subject_url = "https://sctce.etlab.in/ktuacademics/student/viewattendancesubject/81"
         subject_response = session.get(subject_url)
         subject_soup = BeautifulSoup(subject_response.text, "html.parser")
+
         subject_attendance = {}
         subject_table = subject_soup.find("table")
-        
+
         if subject_table and subject_table.find("tbody"):
             subject_rows = subject_table.find("tbody").find_all("tr")
-            for row in subject_rows:
-                cols = row.find_all("td")
-                if len(cols) >= 5:
-                    subject_name = cols[3].text.strip()
-                    attendance_value = cols[4].text.strip()
-                    if subject_name and attendance_value:
-                        subject_attendance[subject_name] = attendance_value
+    
+        for row in subject_rows:
+            cols = row.find_all("td")
+            if len(cols) >= 6:  # Ensures we have all necessary columns
+                subject_code = cols[1].text.strip()  # Subject Code
+                subject_name = cols[3].text.strip()  # Subject Name
+                attendance_value = cols[5].text.strip()  # Attendance Percentage or Count
+            
+                if subject_name and attendance_value:
+                    subject_attendance[subject_code] = {
+                        "subject_name": subject_name,
+                        "attendance": attendance_value
+                    }
         
         # Timetable extraction
         timetable_url = "https://sctce.etlab.in/student/timetable"
