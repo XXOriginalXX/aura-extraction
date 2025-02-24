@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-app = Flask(__name__)
+app = Flask(_name_)
 CORS(app)  # Enable CORS for all routes
 
 @app.route('/', methods=['GET', 'POST'])
@@ -30,7 +30,7 @@ def get_attendance():
         session = requests.Session()
         session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,/;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5'
         })
         
@@ -89,25 +89,18 @@ def get_attendance():
         subject_url = "https://sctce.etlab.in/ktuacademics/student/viewattendancesubject/81"
         subject_response = session.get(subject_url)
         subject_soup = BeautifulSoup(subject_response.text, "html.parser")
-
         subject_attendance = {}
         subject_table = subject_soup.find("table")
-
+        
         if subject_table and subject_table.find("tbody"):
             subject_rows = subject_table.find("tbody").find_all("tr")
-    
-        for row in subject_rows:
-            cols = row.find_all("td")
-            if len(cols) >= 6:  # Ensures we have all necessary columns
-                subject_code = cols[1].text.strip()  # Subject Code
-                subject_name = cols[3].text.strip()  # Subject Name
-                attendance_value = cols[5].text.strip()  # Attendance Percentage or Count
-            
-                if subject_name and attendance_value:
-                    subject_attendance[subject_code] = {
-                        "subject_name": subject_name,
-                        "attendance": attendance_value
-                    }
+            for row in subject_rows:
+                cols = row.find_all("td")
+                if len(cols) >= 5:
+                    subject_name = cols[3].text.strip()
+                    attendance_value = cols[4].text.strip()
+                    if subject_name and attendance_value:
+                        subject_attendance[subject_name] = attendance_value
         
         # Timetable extraction
         timetable_url = "https://sctce.etlab.in/student/timetable"
@@ -137,6 +130,6 @@ def get_attendance():
         print(f"Error: {str(e)}")
         return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 
-if __name__ == '__main__':
+if _name_ == '_main_':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
