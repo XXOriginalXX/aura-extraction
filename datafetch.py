@@ -3,7 +3,6 @@ import requests
 from bs4 import BeautifulSoup
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import re
 from datetime import datetime
 
 app = Flask(__name__)
@@ -31,19 +30,25 @@ def get_attendance():
         if login_response.url == login_url:
             return jsonify({"error": "Login failed! Please check your credentials."}), 401
         
-        # Navigate to attendance page
+        # Fetch daily attendance
         attendance_url = f"{BASE_URL}/student/attendance"
         attendance_response = session.get(attendance_url, timeout=10)
         daily_attendance = extract_daily_attendance(attendance_response.text)
-        
-        # Navigate to attendance by subject page
+
+        # Fetch subject-wise attendance
         subject_attendance_url = f"{BASE_URL}/ktuacademics/student/viewattendancesubject/81"
         subject_response = session.get(subject_attendance_url, timeout=10)
         subject_attendance = extract_subject_attendance(subject_response.text)
+
+        # Fetch timetable
+        timetable_url = f"{BASE_URL}/student/timetable"
+        timetable_response = session.get(timetable_url, timeout=10)
+        timetable = extract_timetable(timetable_response.text)
         
         return jsonify({
             "daily_attendance": daily_attendance,
-            "subject_attendance": subject_attendance
+            "subject_attendance": subject_attendance,
+            "timetable": timetable
         })
     
     except requests.Timeout:
@@ -55,9 +60,10 @@ def get_attendance():
 
 
 def extract_daily_attendance(html):
+    """Extracts daily attendance from the attendance page."""
     soup = BeautifulSoup(html, "html.parser")
     attendance_dict = {}
-    
+
     table = soup.find("table", {"id": "itsthetable"})
     if table:
         rows = table.find("tbody").find_all("tr")
@@ -72,7 +78,12 @@ def extract_daily_attendance(html):
                     formatted_date = date_str
                 
                 periods = row.find_all("td")
-                statuses = [td.get("class", [""])[0].replace("span1 ", "") for td in periods]
+                statuses = []
+                
+                for td in periods:
+                    status = td.get("title", "").strip()  # Extracts status from title attribute
+                    if status:
+                        statuses.append(status)
                 
                 if statuses:
                     attendance_dict[formatted_date] = statuses
@@ -81,9 +92,10 @@ def extract_daily_attendance(html):
 
 
 def extract_subject_attendance(html):
+    """Extracts subject-wise attendance from the attendance page."""
     soup = BeautifulSoup(html, "html.parser")
     subject_attendance = {}
-    
+
     table = soup.find("table", {"class": "items table table-striped table-bordered"})
     if table:
         rows = table.find_all("tr")[1:]
@@ -92,13 +104,31 @@ def extract_subject_attendance(html):
             if len(cols) >= 5:
                 subject_name = cols[3].text.strip()
                 attendance_value = cols[4].text.strip()
-                
+
                 if subject_name and attendance_value:
                     if not attendance_value.endswith('%'):
                         attendance_value += "%"
                     subject_attendance[subject_name] = attendance_value
-    
+
     return subject_attendance
+
+
+def extract_timetable(html):
+    """Extracts timetable details from the timetable page."""
+    soup = BeautifulSoup(html, "html.parser")
+    timetable_data = {}
+
+    table = soup.find("table", {"class": "timetable"})
+    if table:
+        rows = table.find_all("tr")[1:]  # Skip header row
+        for row in rows:
+            cols = row.find_all("td")
+            if len(cols) >= 2:
+                day = cols[0].text.strip()
+                periods = [col.text.strip() for col in cols[1:]]
+                timetable_data[day] = periods
+
+    return timetable_data
 
 
 if __name__ == '__main__':
