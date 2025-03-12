@@ -132,9 +132,50 @@ def get_attendance():
                         "count": "N/A",
                         "percentage": overall_percentage
                     }
-
+        
+        # Daily attendance extraction
+        attendance_url = "https://sctce.etlab.in/student/attendance"
+        attendance_response = session.get(attendance_url)
+        
+        # Check if we can access attendance page
+        if "Login" in attendance_response.text and "Password" in attendance_response.text:
+            return jsonify({"error": "Session expired or login failed!"}), 401
+            
+        attendance_soup = BeautifulSoup(attendance_response.text, "html.parser")
+        attendance_dict = {}
+        attendance_table = attendance_soup.find("table", {"id": "itsthetable"})
+        
+        if attendance_table:
+            rows = attendance_table.find("tbody").find_all("tr") if attendance_table.find("tbody") else []
+            for row in rows:
+                date_element = row.find("th")
+                if date_element:
+                    date = date_element.text.strip()
+                    periods = row.find_all("td")
+                    attendance_statuses = [period.text.strip() for period in periods]  # Extract actual text
+                    attendance_dict[date] = attendance_statuses
+        
+        # Timetable extraction
+        timetable_url = "https://sctce.etlab.in/student/timetable"
+        timetable_response = session.get(timetable_url)
+        timetable_soup = BeautifulSoup(timetable_response.text, "html.parser")
+        timetable_dict = {}
+        timetable_table = timetable_soup.find("table")
+        
+        if timetable_table and timetable_table.find("tbody"):
+            timetable_rows = timetable_table.find("tbody").find_all("tr")
+            for row in timetable_rows:
+                cells = row.find_all("td")
+                if cells:
+                    day = cells[0].text.strip()
+                    periods = cells[1:]
+                    subjects = [period.text.strip().replace("\n", " ") if period.text.strip() else "No Class" for period in periods]
+                    timetable_dict[day] = subjects
+        
         return jsonify({
-            "subject_attendance": subject_attendance
+            "daily_attendance": attendance_dict,
+            "subject_attendance": subject_attendance,
+            "timetable": timetable_dict
         })
         
     except Exception as e:
