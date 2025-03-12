@@ -61,9 +61,54 @@ def get_attendance():
         # Better login verification
         if login_response.url == login_url or "Invalid username or password" in login_response.text:
             return jsonify({"error": "Login failed! Invalid username or password."}), 401
+        
+        # Extract Subject-wise attendance directly from the main attendance page
+        subject_url = "https://sctce.etlab.in/ktuacademics/student/viewattendancesubject"
+        subject_response = session.get(subject_url)
+        
+        if "Login" in subject_response.text and "Password" in subject_response.text:
+            return jsonify({"error": "Session expired or login failed!"}), 401
+        
+        subject_soup = BeautifulSoup(subject_response.text, "html.parser")
+        subject_attendance = {}
+        
+        # Target the table with class "items table table-striped table-bordered"
+        subject_table = subject_soup.find("table", {"class": "items table table-striped table-bordered"})
+        
+        if subject_table:
+            # Extract headers to get subject codes
+            headers = subject_table.find("thead").find_all("th")
+            subject_codes = []
             
-        # Rest of your code for extracting attendance, etc.
-        # Attendance extraction
+            # Skip the first 3 columns (UNi Reg No, Roll No, Name) and the last 2 (Total, Percentage)
+            for header in headers[3:-2]:
+                subject_code = header.text.strip()
+                if subject_code:
+                    subject_codes.append(subject_code)
+            
+            # Extract the attendance data from the first row (assuming it's the student's row)
+            rows = subject_table.find("tbody").find_all("tr")
+            if rows:
+                first_row = rows[0]
+                cells = first_row.find_all("td")
+                
+                # Skip the first 3 cells (UNi Reg No, Roll No, Name)
+                for i, subject_code in enumerate(subject_codes):
+                    cell_index = i + 3  # Offset for the first 3 columns
+                    if cell_index < len(cells):
+                        attendance_value = cells[cell_index].text.strip()
+                        subject_attendance[subject_code] = attendance_value
+                
+                # Add total and percentage if available
+                if len(cells) >= len(subject_codes) + 4:  # +4 for UNi Reg No, Roll No, Name, and ensure Total exists
+                    total_index = len(subject_codes) + 3
+                    subject_attendance["Total"] = cells[total_index].text.strip()
+                
+                if len(cells) >= len(subject_codes) + 5:  # +5 to ensure Percentage exists
+                    percentage_index = len(subject_codes) + 4
+                    subject_attendance["Percentage"] = cells[percentage_index].text.strip()
+        
+        # Daily attendance extraction (keeping this part as is)
         attendance_url = "https://sctce.etlab.in/student/attendance"
         attendance_response = session.get(attendance_url)
         
@@ -85,24 +130,7 @@ def get_attendance():
                     attendance_statuses = [period.text.strip() for period in periods]  # Extract actual text
                     attendance_dict[date] = attendance_statuses
         
-        # Subject-wise attendance extraction
-        subject_url = "https://sctce.etlab.in/ktuacademics/student/viewattendancesubject/81"
-        subject_response = session.get(subject_url)
-        subject_soup = BeautifulSoup(subject_response.text, "html.parser")
-        subject_attendance = {}
-        subject_table = subject_soup.find("table")
-        
-        if subject_table and subject_table.find("tbody"):
-            subject_rows = subject_table.find("tbody").find_all("tr")
-            for row in subject_rows:
-                cols = row.find_all("td")
-                if len(cols) >= 5:
-                    subject_name = cols[3].text.strip()
-                    attendance_value = cols[4].text.strip()
-                    if subject_name and attendance_value:
-                        subject_attendance[subject_name] = attendance_value
-        
-        # Timetable extraction
+        # Timetable extraction (keeping this part as is)
         timetable_url = "https://sctce.etlab.in/student/timetable"
         timetable_response = session.get(timetable_url)
         timetable_soup = BeautifulSoup(timetable_response.text, "html.parser")
