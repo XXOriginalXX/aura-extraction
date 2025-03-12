@@ -64,7 +64,7 @@ def get_attendance():
             return jsonify({"error": "Login failed! Invalid username or password."}), 401
         
         # Extract Subject-wise attendance from the view attendance subject page
-        # This is the page shown in your screenshot
+        # Make sure we're using the correct URL as seen in the screenshot
         subject_url = "https://sctce.etlab.in/ktuacademics/student/viewattendancesubject"
         subject_response = session.get(subject_url)
         
@@ -78,71 +78,117 @@ def get_attendance():
         subject_soup = BeautifulSoup(subject_response.text, "html.parser")
         subject_attendance = {}
         
-        # Target the table with attendance data
-        subject_table = subject_soup.find("table", {"class": "items table table-striped table-bordered"})
+        # Target the table with attendance data - based on the screenshot, it has class "table table-striped table-bordered"
+        subject_table = subject_soup.find("table", {"class": "table-striped"})
+        
+        if not subject_table:
+            # Try alternative class combinations
+            subject_table = subject_soup.find("table", {"class": "items"})
+            if not subject_table:
+                subject_table = subject_soup.find("table", {"class": "table"})
+                if not subject_table:
+                    # Last resort - find any table that might contain the attendance data
+                    all_tables = subject_soup.find_all("table")
+                    for table in all_tables:
+                        if "Roll No" in table.text and "Attendance" in table.text:
+                            subject_table = table
+                            break
         
         if subject_table:
-            # Get all headers to identify subject codes
-            headers = subject_table.find("thead").find_all("th")
+            # From the screenshot, we can see that the subject codes are in the header row
+            # and the student's attendance percentages are in a row with their name
+            headers = subject_table.find_all("th")
             subject_codes = []
             
-            # Extract subject codes from headers, skipping first 3 columns and last 2
-            for i in range(3, len(headers) - 2):
-                subject_code = headers[i].text.strip()
-                if subject_code:
-                    subject_codes.append(subject_code)
+            # Extract subject codes from the headers
+            for header in headers:
+                code_text = header.text.strip()
+                # Skip headers that aren't subject codes (like "UNI Reg No", "Roll No", "Name")
+                if code_text and code_text not in ["UNI Reg No", "Roll No", "Name"]:
+                    subject_codes.append(code_text)
             
-            # Find student's row in the table - should be the first row in tbody
-            tbody = subject_table.find("tbody")
-            if tbody and tbody.find("tr"):
-                student_row = tbody.find("tr")
+            # Find the student's row (in the screenshot it has the name "ADITHYAN S PILLAI")
+            rows = subject_table.find_all("tr")
+            student_row = None
+            
+            for row in rows:
+                # Skip the header row
+                if row.find("th"):
+                    continue
+                    
+                cells = row.find_all("td")
+                if cells and len(cells) > 2:
+                    # Check if this is the student's row by verifying the name or ID
+                    name_cell = cells[2] if len(cells) > 2 else None
+                    if name_cell and "PILLAI" in name_cell.text:
+                        student_row = row
+                        break
+            
+            # If we can't find the specific student row, try to use the first data row
+            if not student_row and len(rows) > 1:
+                for row in rows:
+                    if row.find("td"):
+                        student_row = row
+                        break
+            
+            if student_row:
                 cells = student_row.find_all("td")
+                # Skip the first 3 cells (UNI Reg No, Roll No, Name)
+                start_index = 3
                 
-                # Process each subject cell to extract attendance data
+                # Extract attendance data
                 for i, subject in enumerate(subject_codes):
-                    if i + 3 < len(cells):  # +3 to account for first three columns
-                        cell = cells[i + 3]
+                    if i + start_index < len(cells):
+                        cell = cells[i + start_index]
                         cell_text = cell.text.strip()
                         
-                        # Try to parse the attendance value and percentage
-                        # Format is typically "42/42 (100%)" but might vary
-                        attendance_parts = cell_text.split()
-                        count = "N/A"
-                        percentage = "N/A"
+                        # Parse the attendance value and percentage
+                        # Format is typically "42/42 (100%)" from screenshot
+                        attendance_pattern = r'(\d+/\d+).*?(\d+%)'
+                        match = re.search(attendance_pattern, cell_text)
                         
-                        for part in attendance_parts:
-                            # First part is usually the count (e.g., "42/42")
-                            if '/' in part and count == "N/A":
-                                count = part
+                        if match:
+                            count = match.group(1)
+                            percentage = match.group(2)
+                        else:
+                            # Alternative parsing if regex fails
+                            parts = cell_text.split()
+                            count = parts[0] if parts and '/' in parts[0] else "N/A"
                             
-                            # Look for percentage in parentheses
-                            if '(' in part and ')' in part and '%' in part:
-                                percentage = part.strip('()').replace('%', '') + '%'
+                            # Look for percentage
+                            percentage = "N/A"
+                            for part in parts:
+                                if '%' in part:
+                                    percentage = part.strip('()')
                         
                         subject_attendance[subject] = {
                             "count": count,
                             "percentage": percentage
                         }
                 
-                # Add overall attendance data if available
-                total_index = len(subject_codes) + 3
-                if total_index < len(cells):
-                    total_cell = cells[total_index].text.strip()
-                    total_parts = total_cell.split()
-                    total_count = total_parts[0] if total_parts else "N/A"
+                # Add overall attendance if available (typically last or second-to-last column)
+                if len(cells) > len(subject_codes) + start_index:
+                    total_index = len(subject_codes) + start_index
+                    if total_index < len(cells):
+                        total_cell = cells[total_index].text.strip()
+                        
+                        # Similar parsing for the total
+                        parts = total_cell.split()
+                        total_count = parts[0] if parts and '/' in parts[0] else "N/A"
+                        
+                        subject_attendance["Total"] = {
+                            "count": total_count,
+                            "percentage": "N/A"
+                        }
                     
-                    subject_attendance["Total"] = {
-                        "count": total_count,
-                        "percentage": "N/A"
-                    }
-                
-                percentage_index = len(subject_codes) + 4
-                if percentage_index < len(cells):
-                    overall_percentage = cells[percentage_index].text.strip()
-                    subject_attendance["Overall"] = {
-                        "count": "N/A",
-                        "percentage": overall_percentage
-                    }
+                    # Overall percentage is typically in the last column
+                    percentage_index = len(subject_codes) + start_index + 1
+                    if percentage_index < len(cells):
+                        overall_percentage = cells[percentage_index].text.strip()
+                        subject_attendance["Overall"] = {
+                            "count": "N/A",
+                            "percentage": overall_percentage
+                        }
         
         # Daily attendance extraction
         attendance_url = "https://sctce.etlab.in/student/attendance"
