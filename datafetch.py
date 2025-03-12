@@ -65,7 +65,7 @@ def get_attendance():
         
         # Extract Subject-wise attendance from the view attendance subject page
         # Make sure we're using the correct URL as seen in the screenshot
-        subject_url = "https://sctce.etlab.in/ktuacademics/student/viewattendancesubject"
+        subject_url = "https://sctce.etlab.in/ktuacademics/student/viewattendancesubject/81"
         subject_response = session.get(subject_url)
         
         if "Login" in subject_response.text and "Password" in subject_response.text:
