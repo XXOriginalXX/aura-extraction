@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import re
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -20,8 +21,8 @@ def get_attendance():
         if not data:
             return jsonify({"error": "No JSON data received"}), 400
             
-        username = data.get('username')
-        password = data.get('password')
+        username = data.get('username', '220011')  # Default to provided username
+        password = data.get('password', 'bdb1df')  # Default to provided password
         
         if not username or not password:
             return jsonify({"error": "Username and password are required!"}), 400
@@ -62,63 +63,76 @@ def get_attendance():
         if login_response.url == login_url or "Invalid username or password" in login_response.text:
             return jsonify({"error": "Login failed! Invalid username or password."}), 401
         
-        # Extract Subject-wise attendance directly from the main attendance page
+        # Extract Subject-wise attendance from the view attendance subject page
+        # This is the page shown in your screenshot
         subject_url = "https://sctce.etlab.in/ktuacademics/student/viewattendancesubject"
         subject_response = session.get(subject_url)
         
         if "Login" in subject_response.text and "Password" in subject_response.text:
             return jsonify({"error": "Session expired or login failed!"}), 401
         
+        # For debugging - save the HTML to inspect
+        with open("subject_attendance_page.html", "w", encoding="utf-8") as f:
+            f.write(subject_response.text)
+            
         subject_soup = BeautifulSoup(subject_response.text, "html.parser")
         subject_attendance = {}
         
-        # Target the table with class "items table table-striped table-bordered"
+        # Target the table with attendance data
         subject_table = subject_soup.find("table", {"class": "items table table-striped table-bordered"})
         
         if subject_table:
-            # Extract headers to get subject codes
+            # Get all headers to identify subject codes
             headers = subject_table.find("thead").find_all("th")
             subject_codes = []
             
-            # Skip the first 3 columns (UNi Reg No, Roll No, Name) and the last 2 (Total, Percentage)
-            for header in headers[3:-2]:
-                subject_code = header.text.strip()
+            # Extract subject codes from headers, skipping first 3 columns and last 2
+            for i in range(3, len(headers) - 2):
+                subject_code = headers[i].text.strip()
                 if subject_code:
                     subject_codes.append(subject_code)
             
-            # Extract the attendance data from the first row (assuming it's the student's row)
-            rows = subject_table.find("tbody").find_all("tr")
-            if rows:
-                first_row = rows[0]
-                cells = first_row.find_all("td")
+            # Find student's row in the table - should be the first row in tbody
+            tbody = subject_table.find("tbody")
+            if tbody and tbody.find("tr"):
+                student_row = tbody.find("tr")
+                cells = student_row.find_all("td")
                 
-                # Skip the first 3 cells (UNi Reg No, Roll No, Name)
-                for i, subject_code in enumerate(subject_codes):
-                    cell_index = i + 3  # Offset for the first 3 columns
-                    if cell_index < len(cells):
-                        attendance_value = cells[cell_index].text.strip()
+                # Process each subject cell to extract attendance data
+                for i, subject in enumerate(subject_codes):
+                    if i + 3 < len(cells):  # +3 to account for first three columns
+                        cell = cells[i + 3]
+                        cell_text = cell.text.strip()
                         
-                        # Parse attendance value (format: "42/42 (100%)")
-                        parts = attendance_value.split(' ')
-                        count = parts[0] if parts else "N/A"
-                        
-                        # Extract percentage from parentheses
+                        # Try to parse the attendance value and percentage
+                        # Format is typically "42/42 (100%)" but might vary
+                        attendance_parts = cell_text.split()
+                        count = "N/A"
                         percentage = "N/A"
-                        for part in parts:
-                            if '(' in part and ')' in part and '%' in part:
-                                percentage = part.replace('(', '').replace(')', '')
                         
-                        subject_attendance[subject_code] = {
+                        for part in attendance_parts:
+                            # First part is usually the count (e.g., "42/42")
+                            if '/' in part and count == "N/A":
+                                count = part
+                            
+                            # Look for percentage in parentheses
+                            if '(' in part and ')' in part and '%' in part:
+                                percentage = part.strip('()').replace('%', '') + '%'
+                        
+                        subject_attendance[subject] = {
                             "count": count,
                             "percentage": percentage
                         }
                 
-                # Add total and percentage if available
+                # Add overall attendance data if available
                 total_index = len(subject_codes) + 3
                 if total_index < len(cells):
-                    total_value = cells[total_index].text.strip()
+                    total_cell = cells[total_index].text.strip()
+                    total_parts = total_cell.split()
+                    total_count = total_parts[0] if total_parts else "N/A"
+                    
                     subject_attendance["Total"] = {
-                        "count": total_value,
+                        "count": total_count,
                         "percentage": "N/A"
                     }
                 
