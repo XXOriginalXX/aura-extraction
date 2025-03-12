@@ -98,35 +98,32 @@ def get_attendance():
                     if cell_index < len(cells):
                         attendance_value = cells[cell_index].text.strip()
                         
-                        # Parse the attendance value to extract percentage
-                        # Format is typically like "42/42 (100%)"
-                        attendance_parts = attendance_value.split('(')
-                        if len(attendance_parts) > 1:
-                            raw_count = attendance_parts[0].strip()
-                            percentage = attendance_parts[1].replace(')', '').strip()
-                            
-                            # Format a clean output with both count and percentage
-                            subject_attendance[subject_code] = {
-                                "count": raw_count,
-                                "percentage": percentage
-                            }
-                        else:
-                            subject_attendance[subject_code] = {
-                                "count": attendance_value,
-                                "percentage": "N/A"
-                            }
+                        # Parse attendance value (format: "42/42 (100%)")
+                        parts = attendance_value.split(' ')
+                        count = parts[0] if parts else "N/A"
+                        
+                        # Extract percentage from parentheses
+                        percentage = "N/A"
+                        for part in parts:
+                            if '(' in part and ')' in part and '%' in part:
+                                percentage = part.replace('(', '').replace(')', '')
+                        
+                        subject_attendance[subject_code] = {
+                            "count": count,
+                            "percentage": percentage
+                        }
                 
                 # Add total and percentage if available
-                if len(cells) >= len(subject_codes) + 4:  # +4 for UNi Reg No, Roll No, Name, and ensure Total exists
-                    total_index = len(subject_codes) + 3
+                total_index = len(subject_codes) + 3
+                if total_index < len(cells):
                     total_value = cells[total_index].text.strip()
                     subject_attendance["Total"] = {
                         "count": total_value,
                         "percentage": "N/A"
                     }
                 
-                if len(cells) >= len(subject_codes) + 5:  # +5 to ensure Percentage exists
-                    percentage_index = len(subject_codes) + 4
+                percentage_index = len(subject_codes) + 4
+                if percentage_index < len(cells):
                     overall_percentage = cells[percentage_index].text.strip()
                     subject_attendance["Overall"] = {
                         "count": "N/A",
