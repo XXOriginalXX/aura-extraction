@@ -1,4 +1,4 @@
-# AURA Smart Board - Attendance Scraper API
+# Attendance Scraper API
 
 AURA Smart Board is a Flask-based API that scrapes and returns student attendance data, subject-wise and date-wise, from the [ETLab portal](https://sctce.etlab.in). It also extracts the class timetable.
 
