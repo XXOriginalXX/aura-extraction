@@ -22,7 +22,7 @@ AURA Smart Board is a Flask-based API that scrapes and returns student attendanc
 - Requests (session handling)
 - Flask-CORS (CORS support)
 
----
+-
 
 ## 🚀 Getting Started
 
